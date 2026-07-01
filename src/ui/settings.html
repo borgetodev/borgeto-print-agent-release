@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Borgeto Print Agent Ayarları</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        background: #f4f6f8;
+        color: #1f2937;
+      }
+
+      .wrap {
+        padding: 20px;
+      }
+
+      h1 {
+        margin: 0 0 6px;
+        font-size: 18px;
+      }
+
+      .subtitle {
+        margin: 0 0 18px;
+        color: #6b7280;
+        font-size: 13px;
+      }
+
+      .card {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        padding: 16px;
+        margin-bottom: 14px;
+      }
+
+      label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+
+      .hint {
+        margin-top: 6px;
+        font-size: 12px;
+        color: #6b7280;
+      }
+
+      input,
+      select {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+        font-size: 14px;
+        background: #fff;
+      }
+
+      .readonly {
+        padding: 10px 12px;
+        background: #f9fafb;
+        border: 1px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 14px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 18px;
+      }
+
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 10px 14px;
+        font-size: 14px;
+        cursor: pointer;
+      }
+
+      .primary {
+        background: #111827;
+        color: #fff;
+      }
+
+      .secondary {
+        background: #e5e7eb;
+        color: #111827;
+      }
+
+      .status {
+        margin-top: 12px;
+        font-size: 13px;
+        min-height: 18px;
+      }
+
+      .status.ok {
+        color: #047857;
+      }
+
+      .status.error {
+        color: #b91c1c;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <h1>Borgeto Print Agent</h1>
+      <p class="subtitle">Yazıcı ve şirket eşleştirmesi</p>
+
+      <div class="card">
+        <label for="computerName">Bilgisayar Adı</label>
+        <div id="computerName" class="readonly">Yükleniyor...</div>
+        <p class="hint">Firebase kayıtlarına otomatik eklenir.</p>
+      </div>
+
+      <div class="card">
+        <label for="companyId">Company ID</label>
+        <input
+          id="companyId"
+          type="text"
+          placeholder="Firestore companyId değerini girin"
+        />
+        <p class="hint">Bir kez kaydedin; uygulama hafızasında tutulur.</p>
+      </div>
+
+      <div class="card">
+        <label for="printerName">Dinlenecek Yazıcı</label>
+        <select id="printerName">
+          <option value="">Yazıcılar yükleniyor...</option>
+        </select>
+        <p class="hint">Seçilen yazıcının kuyruğu izlenir.</p>
+      </div>
+
+      <div class="actions">
+        <button id="saveBtn" class="primary">Kaydet</button>
+        <button id="refreshBtn" class="secondary">Yenile</button>
+      </div>
+
+      <div id="status" class="status"></div>
+    </div>
+
+    <script>
+      const companyIdInput = document.getElementById("companyId");
+      const printerSelect = document.getElementById("printerName");
+      const computerNameEl = document.getElementById("computerName");
+      const statusEl = document.getElementById("status");
+      const saveBtn = document.getElementById("saveBtn");
+      const refreshBtn = document.getElementById("refreshBtn");
+
+      function setStatus(message, type = "") {
+        statusEl.textContent = message;
+        statusEl.className = `status ${type}`.trim();
+      }
+
+      async function loadPrinters(selectedName = "") {
+        const printers = await window.printAgent.listPrinters();
+        printerSelect.innerHTML = "";
+
+        if (printers.length === 0) {
+          const option = document.createElement("option");
+          option.value = "";
+          option.textContent = "Yazıcı bulunamadı";
+          printerSelect.appendChild(option);
+          return;
+        }
+
+        for (const printer of printers) {
+          const option = document.createElement("option");
+          option.value = printer.name;
+          option.textContent = printer.isDefault
+            ? `${printer.name} (Varsayılan)`
+            : printer.name;
+          printerSelect.appendChild(option);
+        }
+
+        if (selectedName) {
+          printerSelect.value = selectedName;
+        }
+      }
+
+      async function loadSettings() {
+        const data = await window.printAgent.getSettings();
+        computerNameEl.textContent = data.computerName;
+        companyIdInput.value = data.settings.companyId || "";
+        await loadPrinters(
+          data.settings.printerName || data.activePrinterName || ""
+        );
+      }
+
+      saveBtn.addEventListener("click", async () => {
+        try {
+          setStatus("Kaydediliyor...");
+          const result = await window.printAgent.saveSettings({
+            companyId: companyIdInput.value.trim(),
+            printerName: printerSelect.value,
+          });
+          setStatus(
+            `Kaydedildi. İzlenen yazıcı: ${result.activePrinterName}`,
+            "ok"
+          );
+        } catch (error) {
+          setStatus(error.message || "Kayıt başarısız", "error");
+        }
+      });
+
+      refreshBtn.addEventListener("click", async () => {
+        setStatus("Yenileniyor...");
+        await loadSettings();
+        setStatus("Yenilendi", "ok");
+      });
+
+      loadSettings().catch((error) => {
+        setStatus(error.message || "Ayarlar yüklenemedi", "error");
+      });
+    </script>
+  </body>
+</html>
