@@ -43,7 +43,7 @@
       "target": [
         "nsis"
       ],
-      "icon": "assets/tray-icon.png"
+      "icon": "assets/tray-icon.ico"
     },
     "nsis": {
       "oneClick": false,
